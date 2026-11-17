@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://fapi.binance.com https://www.okx.com https://api.bybit.com https://api.twelvedata.com https://api.gold-api.com https://api.frankfurter.dev https://open.er-api.com https://xaus.com https://api.rss2json.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1218">
+<meta name="description" content="XAU/USD（ゴールド）の相場分析補助ツール。投資助言ではありません。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GOLD分析">
+<title>GOLD 相場分析</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">GOLD<span>XAU/USD</span></div>
+  <div class="top-price">
+    <div id="hdrPrice" class="hdr-price">—</div>
+    <div id="hdrChange" class="hdr-change">—</div>
+  </div>
+  <button id="btnTheme" class="icon-btn" aria-label="テーマ切替" title="テーマ切替">◐</button>
+</header>
+<button id="sourceBar" class="source-bar" type="button">データ取得中…</button>
+<div id="updateBar" class="update-bar" role="status" hidden>新しい版があります <button class="btn sm primary" id="btnUpdate" type="button">更新する</button></div>
+
+<main>
+<!-- ============ チャート ============ -->
+<section id="tab-chart" class="tab active" aria-label="チャート">
+  <div class="price-card card">
+    <div class="pc-row">
+      <div>
+        <div id="spotLabel" class="label">スポット参考値 gold-api.com</div>
+        <div id="spotPrice" class="big-price">—</div>
+      </div>
+      <div class="pc-right">
+        <div id="futLabel" class="label">チャート：—</div>
+        <div class="mid-price"><span id="futPrice">—</span><span id="futStale" class="stale-note"></span></div>
+        <div id="basisText" class="small">先物−スポット: —</div>
+      </div>
+    </div>
+    <div class="pc-grid">
+      <div><span class="label">先物 24h 変化</span><b id="chg24">—</b></div>
+      <div><span class="label">24h 高</span><b id="hi24">—</b></div>
+      <div><span class="label">24h 安</span><b id="lo24">—</b></div>
+      <div><span class="label">ADR(14)</span><b id="adrVal">—</b></div>
+      <div><span class="label">本日の消化率</span><b id="adrProg">—</b></div>
+      <div><span class="label">USD/JPY</span><b id="usdjpy">—</b></div>
+      <div><span class="label">円/oz</span><b id="yenOz">—</b></div>
+      <div><span class="label">円/g</span><b id="yenG">—</b></div>
+      <div><span class="label">金銀比</span><b id="gsr">—</b></div>
+    </div>
+    <div id="pcUpdated" class="small"></div>
+    <div id="sessionClock" class="session-clock">セッション: —</div>
+  </div>
+
+  <div class="tf-bar" id="tfBar" role="tablist" aria-label="時間足"></div>
+  <div class="toolbar">
+    <select id="chartType" aria-label="チャートの種類">
+      <option value="candle">ローソク足</option>
+      <option value="heikin">平均足</option>
+      <option value="line">ライン</option>
+      <option value="area">エリア</option>
+    </select>
+    <button class="btn sm" id="btnIndicators">指標</button>
+    <button class="btn sm" id="btnLevels">水準</button>
+    <button class="btn sm toggle" id="btnHline" aria-pressed="false">水平線</button>
+    <button class="btn sm toggle" id="btnTrend" aria-pressed="false">トレンド線</button>
+    <button class="btn sm" id="btnClearDraw">描画消去</button>
+    <button class="btn sm" id="btnFull">全画面</button>
+  </div>
+  <div class="chart-wrap" id="chartWrap">
+    <div id="legend" class="legend">—</div>
+    <button class="btn sm fs-close" id="btnFsClose">閉じる</button>
+    <div id="chart" class="chart"></div>
+    <div id="chartMsg" class="chart-msg" hidden></div>
+  </div>
+  <p class="note">チャートは暗号資産取引所の金（XAU）無期限先物（スポット近似）です。出来高は先物の出来高です。先物は週末も取引されるため、週末の足は<span id="weekendNote">薄く表示</span>しています。背景色: <span class="sw tokyo"></span>東京 <span class="sw london"></span>ロンドン <span class="sw ny"></span>NY <span class="sw ov"></span>重複</p>
+  <div class="card">
+    <h3>この時間足の状態</h3>
+    <div id="chartInfo" class="info-list"></div>
+  </div>
+</section>
+
+<!-- ============ 分析 ============ -->
+<section id="tab-analysis" class="tab" aria-label="分析">
+  <div class="card">
+    <h2>総合判定 <small id="compTf"></small></h2>
+    <div class="gauge"><div id="gaugeFill" class="gauge-fill"></div><div id="gaugeMark" class="gauge-mark"></div></div>
+    <div class="gauge-labels"><span>弱気</span><span>中立</span><span>強気</span></div>
+    <div class="comp-head"><span id="compScore" class="comp-score">—</span><span id="compLabel" class="pill">—</span></div>
+    <p id="compLive" class="small note-dim"></p>
+    <p id="compSummary" class="summary"></p>
+    <ul id="compReasons" class="reasons"></ul>
+    <p class="disclaimer-inline">これは過去の価格から機械的に計算した参考情報で、将来の値動きや売買を示すものではありません。</p>
+  </div>
+  <div class="card">
+    <h3>指標ごとの判定</h3>
+    <table class="tbl"><thead><tr><th>指標</th><th>値</th><th>傾向</th><th>重み</th></tr></thead><tbody id="judgeTable"></tbody></table>
+    <h4>参考（スコアに含めない）</h4>
+    <table class="tbl"><tbody id="refTable"></tbody></table>
+  </div>
+  <div class="card">
+    <h3>マルチタイムフレーム</h3>
+    <p class="small">5分〜日足の総合判定を順番に取得します（取得間隔 300ms）。</p>
+    <button class="btn" id="btnMtf">読み込む</button>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>足</th><th>判定</th><th>スコア</th><th>RSI</th><th>MACD</th><th>ADX</th></tr></thead><tbody id="mtfTable"></tbody></table></div>
+    <p id="mtfAgree" class="small"></p>
+  </div>
+  <div class="card">
+    <h3>シグナル・パターン・ボラティリティ</h3>
+    <div id="signalList" class="info-list"></div>
+  </div>
+  <div class="card">
+    <h3>水準</h3>
+    <div class="seg" id="pivotSeg">
+      <button data-m="classic" class="on">クラシック</button><button data-m="fibonacci">フィボ</button><button data-m="camarilla">カマリラ</button>
+    </div>
+    <p id="levelSource" class="small"></p>
+    <table class="tbl"><tbody id="pivotTable"></tbody></table>
+    <h4>前日・前週・前月の高安</h4>
+    <table class="tbl"><tbody id="prevHLTable"></tbody></table>
+    <h4>サポート/レジスタンス（自動）</h4>
+    <table class="tbl"><tbody id="srTable"></tbody></table>
+    <h4>フィボナッチ（直近100本・自動）</h4>
+    <table class="tbl"><tbody id="fibTable"></tbody></table>
+    <h4>ラウンドナンバー</h4>
+    <p id="roundText" class="small"></p>
+  </div>
+  <div class="card">
+    <h3>統計</h3>
+    <table class="tbl"><tbody id="statsTable"></tbody></table>
+    <h4>期間リターン（日足）</h4>
+    <table class="tbl"><tbody id="returnsTable"></tbody></table>
+    <h4>時間帯別の平均値幅（JST・1時間足）</h4>
+    <div id="heatmap" class="heatmap"></div>
+    <h4>曜日別の平均値幅（JST）</h4>
+    <div id="weekdayBars" class="bars"></div>
+    <h4>季節性（月別の平均騰落率・xaus.com 5年日足）</h4>
+    <button class="btn sm" id="btnSeason">読み込む</button>
+    <div id="seasonBars" class="bars"></div>
+    <h4>相関（日次リターン）・ドル指数</h4>
+    <button class="btn sm" id="btnCorr">読み込む</button>
+    <table class="tbl"><tbody id="corrTable"></tbody></table>
+  </div>
+  <div class="card">
+    <h3>先物の建玉・資金調達率</h3>
+    <table class="tbl"><tbody id="derivTable"></tbody></table>
+  </div>
+</section>
+
+<!-- ============ 計算 ============ -->
+<section id="tab-tools" class="tab" aria-label="計算">
+  <div class="card">
+    <h3>ロット・リスク計算</h3>
+    <div class="form">
+      <label>口座残高<input id="lotBalance" inputmode="decimal"></label>
+      <label>口座通貨<select id="lotCurrency"><option value="JPY">円</option><option value="USD">ドル</option></select></label>
+      <label>許容損失 %<input id="lotRisk" inputmode="decimal"></label>
+      <label>売買<select id="lotSide"><option value="buy">買い</option><option value="sell">売り</option></select></label>
+      <label>エントリー価格<input id="lotEntry" inputmode="decimal"></label>
+      <label>損切り価格<input id="lotStop" inputmode="decimal"></label>
+      <label>USD/JPY（空欄なら自動）<input id="lotUsdJpy" inputmode="decimal"></label>
+    </div>
+    <div class="btn-row"><button class="btn sm" id="btnLotNow">現在値とATRで埋める</button></div>
+    <div id="lotResult" class="result"></div>
+    <p class="small" id="lotNote"></p>
+  </div>
+  <div class="card">
+    <h3>ATR 基準の損切り・利確の目安</h3>
+    <div class="form">
+      <label>売買<select id="atrSide"><option value="buy">買い</option><option value="sell">売り</option></select></label>
+      <label>エントリー<input id="atrEntry" inputmode="decimal"></label>
+      <label>ATR(14)<input id="atrValue" inputmode="decimal"></label>
+      <label>倍率<input id="atrMult" inputmode="decimal"></label>
+    </div>
+    <div class="btn-row"><button class="btn sm" id="btnAtrRefill" type="button">ATR から入れ直す</button></div>
+    <div id="atrResult" class="result"></div>
+    <h4>リスクリワード比</h4>
+    <div class="form">
+      <label>損切り<input id="rrStop" inputmode="decimal"></label>
+      <label>利確<input id="rrTarget" inputmode="decimal"></label>
+    </div>
+    <div id="rrResult" class="result"></div>
+  </div>
+  <div class="card">
+    <h3>pips・損益計算</h3>
+    <div class="form">
+      <label>売買<select id="pnlSide"><option value="buy">買い</option><option value="sell">売り</option></select></label>
+      <label>エントリー<input id="pnlEntry" inputmode="decimal"></label>
+      <label>決済<input id="pnlExit" inputmode="decimal"></label>
+      <label>ロット<input id="pnlLots" inputmode="decimal" value="0.1"></label>
+    </div>
+    <div id="pnlResult" class="result"></div>
+  </div>
+  <div class="card">
+    <h3>必要証拠金</h3>
+    <div class="form">
+      <label>ロット<input id="mgLots" inputmode="decimal" value="0.1"></label>
+      <label>価格<input id="mgPrice" inputmode="decimal"></label>
+      <label>レバレッジ<input id="mgLev" inputmode="decimal"></label>
+    </div>
+    <div id="mgResult" class="result"></div>
+  </div>
+  <p class="small">1 lot の oz 数・pip の大きさ・ロット刻みは業者により異なります。「その他 → 設定」で変更できます。計算結果は目安です。</p>
+</section>
+
+<!-- ============ 日記 ============ -->
+<section id="tab-journal" class="tab" aria-label="トレード日記">
+  <div class="card">
+    <h3>トレードを記録</h3>
+    <div class="form">
+      <label>日時<input id="jDate" type="datetime-local"></label>
+      <label>売買<select id="jSide"><option value="buy">買い</option><option value="sell">売り</option></select></label>
+      <label>エントリー<input id="jEntry" inputmode="decimal"></label>
+      <label>決済<input id="jExit" inputmode="decimal"></label>
+      <label>ロット<input id="jLots" inputmode="decimal" value="0.1"></label>
+      <label>損益（空欄なら自動計算・口座通貨）<input id="jPnl" inputmode="decimal"></label>
+    </div>
+    <label class="full">メモ<textarea id="jMemo" rows="2" maxlength="500"></textarea></label>
+    <div class="btn-row"><button class="btn primary" id="btnJAdd">記録する</button></div>
+  </div>
+  <div class="card">
+    <h3>成績</h3>
+    <div id="jStats" class="stat-grid"></div>
+    <canvas id="jChart" class="pnl-canvas" width="600" height="220" aria-label="累積損益グラフ"></canvas>
+  </div>
+  <div class="card">
+    <h3>履歴</h3>
+    <div id="jList" class="j-list"></div>
+  </div>
+</section>
+
+<!-- ============ アラート ============ -->
+<section id="tab-alerts" class="tab" aria-label="アラートとカレンダー">
+  <div class="card">
+    <h3>価格アラート</h3>
+    <div class="form">
+      <label>価格<input id="alPrice" inputmode="decimal"></label>
+      <label>条件<select id="alDir"><option value="above">上抜け（以上）</option><option value="below">下抜け（以下）</option></select></label>
+    </div>
+    <div class="btn-row"><button class="btn primary" id="btnAlAdd">追加</button></div>
+    <div id="alList" class="j-list"></div>
+  </div>
+  <div class="card">
+    <h3>指標アラート（表示中の時間足）</h3>
+    <label class="chk"><input type="checkbox" id="alRsi"> RSI が 70 / 30 を抜けたとき</label>
+    <label class="chk"><input type="checkbox" id="alEma"> EMA 短期/長期のクロス</label>
+    <label class="chk"><input type="checkbox" id="alSt"> スーパートレンドの向きが変わったとき</label>
+    <h4>通知方法</h4>
+    <label class="chk"><input type="checkbox" id="alNotify"> ブラウザ通知</label>
+    <label class="chk"><input type="checkbox" id="alSound"> 音</label>
+    <label class="chk"><input type="checkbox" id="alVibrate"> バイブ（対応端末のみ）</label>
+    <div class="btn-row"><button class="btn sm" id="btnNotifyPerm">通知を許可する</button><button class="btn sm" id="btnTestAlert">テスト</button></div>
+    <p class="small">通知はアプリを開いている間（またはバックグラウンドで動作が続いている間）だけ届きます。サーバーを使わないため、アプリを閉じた後のプッシュ通知はできません。</p>
+  </div>
+  <div class="card">
+    <h3>経済指標カレンダー</h3>
+    <p class="small">ゴールドに影響しやすい米指標の予定です。日程は目安なので公式発表で確認し、必要に応じて編集してください。時刻は日本時間。</p>
+    <div id="calList" class="j-list"></div>
+    <h4>予定を追加</h4>
+    <div class="form">
+      <label>日時（JST）<input id="calDate" type="datetime-local"></label>
+      <label>名前<input id="calName" maxlength="60"></label>
+      <label>重要度<select id="calImp"><option value="3">高</option><option value="2">中</option><option value="1">低</option></select></label>
+      <label>事前通知（分前）<input id="calMin" inputmode="numeric"></label>
+    </div>
+    <label class="full">ゴールドへの影響メモ<input id="calMemo" maxlength="120"></label>
+    <div class="btn-row"><button class="btn primary" id="btnCalAdd">追加</button><button class="btn sm" id="btnCalReset">既定の予定に戻す</button></div>
+  </div>
+  <div class="card">
+    <h3>ニュース（RSS）</h3>
+    <p class="small">rss2json.com 経由で RSS を読み込みます（任意機能。無料枠の回数は未確認）。</p>
+    <button class="btn sm" id="btnNews">読み込む</button>
+    <ul id="newsList" class="news"></ul>
+  </div>
+</section>
+
+<!-- ============ その他 ============ -->
+<section id="tab-more" class="tab" aria-label="設定とヘルプ">
+  <div class="card">
+    <h3>データ</h3>
+    <div class="form">
+      <label>データソース<select id="setSource">
+        <option value="auto">自動（Binance→OKX→Bybit→デモ）</option>
+        <option value="binance">Binance 先物のみ</option>
+        <option value="okx">OKX 先物のみ</option>
+        <option value="bybit">Bybit 先物のみ</option>
+        <option value="twelvedata">Twelve Data（キー必要）</option>
+        <option value="demo">デモデータ</option>
+      </select></label>
+      <label>現在値の更新（秒）<input id="setPriceInt" inputmode="numeric"></label>
+      <label>Twelve Data APIキー（任意）<input id="setApiKey" type="password" autocomplete="off" placeholder="未設定"></label>
+    </div>
+    <p class="small">APIキーはこの端末の localStorage にだけ保存され、エクスポートには含まれません。キーが無くても無料の公開データで動きます。</p>
+    <div class="btn-row"><button class="btn sm" id="btnResetBlocked">地域制限の記録をリセット</button><button class="btn sm" id="btnClearCache">キャッシュを消去</button></div>
+  </div>
+  <div class="card">
+    <h3>取引条件</h3>
+    <div class="form">
+      <label>口座通貨<select id="setCurrency"><option value="JPY">円</option><option value="USD">ドル</option></select></label>
+      <label>USD/JPY 自動取得<select id="setUsdJpyAuto"><option value="1">する</option><option value="0">しない</option></select></label>
+      <label>USD/JPY（手入力・取得失敗時）<input id="setUsdJpy" inputmode="decimal"></label>
+      <label>口座残高<input id="setBalance" inputmode="decimal"></label>
+      <label>許容損失 %<input id="setRisk" inputmode="decimal"></label>
+      <label>1 lot の oz 数<input id="setContract" inputmode="decimal"></label>
+      <label>ロット刻み<input id="setLotStep" inputmode="decimal"></label>
+      <label>最小ロット<input id="setMinLot" inputmode="decimal"></label>
+      <label>最大ロット<input id="setMaxLot" inputmode="decimal"></label>
+      <label>1 pip の大きさ（$）<input id="setPip" inputmode="decimal"></label>
+      <label>レバレッジ<input id="setLev" inputmode="decimal"></label>
+      <label>ATR 損切り倍率<input id="setAtrMult" inputmode="decimal"></label>
+      <label>利確の RR（カンマ区切り）<input id="setRR"></label>
+    </div>
+  </div>
+  <div class="card">
+    <h3>表示</h3>
+    <div class="form">
+      <label>テーマ<select id="setTheme"><option value="dark">ダーク</option><option value="light">ライト</option></select></label>
+      <label>週末の足<select id="setWeekend"><option value="dim">薄く表示</option><option value="hide">非表示</option><option value="show">通常表示</option></select></label>
+      <label>セッション背景色<select id="setSessionBg"><option value="1">表示</option><option value="0">非表示</option></select></label>
+    </div>
+  </div>
+  <div class="card">
+    <h3>総合判定の重み</h3>
+    <div class="form" id="weightsForm"></div>
+    <button class="btn sm" id="btnWeightsReset">既定に戻す</button>
+  </div>
+  <div class="card">
+    <h3>設定のエクスポート / インポート</h3>
+    <label class="chk"><input type="checkbox" id="expJournal"> トレード日記も含める</label>
+    <div class="btn-row"><button class="btn sm" id="btnExport">エクスポート（JSON）</button><label class="btn sm file-btn">インポート<input type="file" id="fileImport" accept="application/json,.json" hidden></label></div>
+    <p id="importResult" class="small"></p>
+    <div class="btn-row"><button class="btn sm" id="btnUndoImport" type="button" hidden>インポート前に戻す</button></div>
+  </div>
+  <div class="card">
+    <h3>ヘルプ・用語集</h3>
+    <details><summary>SMA / EMA（移動平均）</summary><p>一定期間の終値の平均。価格が線の上なら上昇基調、下なら下降基調の目安。短期線が長期線を上抜けるとゴールデンクロス（GC）、下抜けるとデッドクロス（DC）。</p></details>
+    <details><summary>ボリンジャーバンド</summary><p>移動平均 ± 標準偏差×2。バンド幅が狭まる（スクイーズ）と、その後に値動きが大きくなりやすいと言われます。%B は価格がバンドのどこにあるか（0=下限、1=上限）。</p></details>
+    <details><summary>一目均衡表</summary><p>転換線(9)・基準線(26)・先行スパン A/B（26本先にずらす＝雲）・遅行スパン（26本前にずらす）。価格が雲の上なら上昇寄り。</p></details>
+    <details><summary>パラボリック SAR / スーパートレンド</summary><p>トレンド追随型の指標。点（線）が価格の下なら上昇トレンド、上なら下降トレンド。反転位置は損切りの目安としても使われます。</p></details>
+    <details><summary>RSI</summary><p>0〜100 の値で、70 以上は買われすぎ、30 以下は売られすぎの目安。強いトレンドでは張り付くことがあります。</p></details>
+    <details><summary>MACD</summary><p>EMA12 と EMA26 の差。シグナル線（MACD の EMA9）より上なら上昇の勢い。ヒストグラムは差の大きさ。</p></details>
+    <details><summary>ストキャスティクス</summary><p>直近14本の高安の中で終値がどこにあるか。80 以上・20 以下で %K と %D がクロスすると反転の兆しとされます。</p></details>
+    <details><summary>ADX / DMI</summary><p>ADX はトレンドの強さ（25 以上で強い、20 未満で弱い）。+DI が −DI より上なら上昇方向。</p></details>
+    <details><summary>ATR / ADR</summary><p>ATR は1本あたりの平均的な値幅。損切り幅の目安に使われます。ADR は平均日次値幅で、本日の消化率が 100% に近いと残りの値幅は小さいことが多いです。</p></details>
+    <details><summary>CCI / ウィリアムズ%R / ROC / モメンタム</summary><p>いずれも勢いを見るオシレーター。CCI は ±100、%R は −20/−80 が目安。ROC・モメンタムは 0 より上で上向き。</p></details>
+    <details><summary>VWAP</summary><p>出来高加重平均価格（日本時間 9:00＝UTC 0時にリセット）。日中の平均的な取引コストの目安。ここでの出来高は先物の出来高です。</p></details>
+    <details><summary>ピボット</summary><p>前日の高値・安値・終値から計算する当日の目安ライン（P・R1〜3・S1〜3）。カマリラは終値中心の狭いライン。</p></details>
+    <details><summary>フィボナッチ・リトレースメント</summary><p>直近の高値と安値の間を 23.6% / 38.2% / 50% / 61.8% などで区切った押し目・戻りの目安。</p></details>
+    <details><summary>ダイバージェンス</summary><p>価格は安値（高値）を更新したのに RSI は更新しない状態。勢いの衰えの可能性を示します（「可能性」の表示です）。</p></details>
+    <details><summary>先物とスポット・週末の足</summary><p>チャートは暗号資産取引所の金の無期限先物で、スポット価格とは数ドルずれることがあります（ベーシス）。先物は週末も動くため、FX 業者の MT4 等とは週末を含む期間の指標値がずれます。</p></details>
+    <details><summary>セッション</summary><p>東京 9:00–18:00、ロンドン 8:00–17:00（現地）、NY 8:00–17:00（現地）。夏時間は自動で反映します。ロンドンと NY の重複時間帯は値動きが大きくなりやすいとされます。</p></details>
+  </div>
+  <div class="card">
+    <h3>免責事項</h3>
+    <p class="small">本アプリは相場分析の補助ツールであり、投資助言ではありません。表示される判定・シグナル・数値は過去の価格から機械的に計算した参考情報で、将来の値動きや利益を保証するものではありません。データは無料の公開 API から取得しており、遅延・誤り・欠落の可能性があります。取引の判断はご自身の責任で行ってください。</p>
+    <p class="small">データ: Binance / OKX / Bybit（先物）、gold-api.com（スポット）、frankfurter（api.frankfurter.dev）・open.er-api.com（為替）、xaus.com（長期日足）。チャート: TradingView Lightweight Charts（下記）。</p>
+    <h4>チャートライブラリ</h4>
+    <p class="small">TradingView Lightweight Charts™ v5.2.0<br>Copyright (с) 2025 TradingView, Inc. <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">https://www.tradingview.com/</a><br>ライセンス: Apache License 2.0（<a href="./vendor/lightweight-charts.LICENSE.txt" target="_blank" rel="noopener">vendor/lightweight-charts.LICENSE.txt</a>・<a href="./vendor/lightweight-charts.NOTICE.txt" target="_blank" rel="noopener">NOTICE</a>）。本アプリに同梱し、改変せずに使っています。</p>
+    <p class="small"><a href="./tests.html">計算関数のテストを開く</a></p>
+  </div>
+</section>
+</main>
+
+<p class="disclaimer">投資助言ではありません。表示は過去データからの機械的な参考情報です。</p>
+
+<nav class="bottom-nav" aria-label="メニュー">
+  <button data-tab="chart" class="active"><span class="ni">▤</span>チャート</button>
+  <button data-tab="analysis"><span class="ni">◎</span>分析</button>
+  <button data-tab="tools"><span class="ni">∑</span>計算</button>
+  <button data-tab="journal"><span class="ni">✎</span>日記</button>
+  <button data-tab="alerts"><span class="ni">!</span>アラート</button>
+  <button data-tab="more"><span class="ni">≡</span>その他</button>
+</nav>
+
+<dialog id="dlgIndicators" class="sheet">
+  <form method="dialog" class="sheet-inner">
+    <h3>指標の表示とパラメータ</h3>
+    <div id="indForm"></div>
+    <div class="btn-row"><button class="btn primary" value="ok">閉じる</button></div>
+  </form>
+</dialog>
+<dialog id="dlgLevels" class="sheet">
+  <form method="dialog" class="sheet-inner">
+    <h3>水準・マーカー</h3>
+    <div id="lvForm"></div>
+    <div class="btn-row"><button class="btn primary" value="ok">閉じる</button></div>
+  </form>
+</dialog>
+<dialog id="dlgSource" class="sheet">
+  <form method="dialog" class="sheet-inner">
+    <h3>データソースの状態</h3>
+    <div id="srcDetail"></div>
+    <div class="btn-row"><button class="btn sm" id="btnRetry" value="retry">今すぐ再取得</button><button class="btn primary" value="ok">閉じる</button></div>
+  </form>
+</dialog>
+<dialog id="dlgImport" class="sheet">
+  <form method="dialog" class="sheet-inner">
+    <h3>インポートの確認</h3>
+    <p class="small">取り込み方を選んでください。日記などは「追加」にすると今の記録を残します。</p>
+    <label class="chk"><input type="radio" name="impMode" value="replace" checked> 置き換え（ファイルの内容にする）</label>
+    <label class="chk"><input type="radio" name="impMode" value="merge"> 追加（同じ記録は除く）</label>
+    <ul id="impPlan" class="reasons small"></ul>
+    <p class="small">取り込む前の状態は自動で保存します。「その他 → インポート前に戻す」で 1 回だけ元に戻せます。</p>
+    <div class="btn-row"><button class="btn sm" value="cancel">やめる</button><button class="btn primary" value="ok">取り込む</button></div>
+  </form>
+</dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

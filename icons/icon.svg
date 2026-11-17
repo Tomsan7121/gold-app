@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f1218"/>
+  <polygon points="96,360 416,360 368,280 144,280" fill="#f5c542"/>
+  <polygon points="144,272 368,272 336,216 176,216" fill="#d9a520"/>
+  <polyline points="96,184 176,140 240,164 320,96 416,120" fill="none" stroke="#26a69a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="448" font-family="Arial, sans-serif" font-size="64" font-weight="700" fill="#f5c542" text-anchor="middle">XAU</text>
+</svg>
